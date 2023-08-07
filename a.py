@@ -5,7 +5,7 @@ import rsa
 import sqlite3
 import hashlib
 
-HOST = "192.168.1.64"
+HOST = "127.0.0.1"
 PORT = 8888
 
 PUBLIC_KEY_SIZE = 2048
@@ -23,10 +23,13 @@ class ChatServer:
         self.usernames = []
     def broadcast(self, message, sender_name=None):
         with self.lock:
+
             for client_name, client_data in self.clients.items():
                 if sender_name != client_name:
+                    print(message)
                     encrypted_message = rsa.encrypt(message.encode('utf-8'), client_data['public_key'])
                     client_data['socket'].send(encrypted_message)
+
 
     def handle_client(self, client_socket, client_address):
         try:
@@ -50,7 +53,7 @@ class ChatServer:
                 login = rsa.encrypt("LOGIN".encode('utf-8'), public_key)
                 client_socket.send(login)
 
-                self.usernames.append(username)
+                self.clients[username] = client_socket
             else:
                 failed = rsa.encrypt("FAILED".encode('utf-8'), public_key)
                 client_socket.send(failed)
@@ -70,15 +73,48 @@ class ChatServer:
                 decrypted_message = rsa.decrypt(encrypted_message, self.private_key).decode('utf-8')
                 print(decrypted_message)
 
+
+                def search_user(clients, username_op):
+                    if username_op in self.clients:
+                        return clients[username_op]
+                    else:
+                        return "NotFound"
                 if decrypted_message.lower() == "quit":
                     self.broadcast(f"{username} LEFT THE CHAT!", username)
                     client_socket.close()
                     with self.lock:
                         del self.clients[username]
                     break
+                elif '@' in decrypted_message:
+                    b = decrypted_message.split("|")
+                    if len(b) == 2:
+                        print(b[0])
+                        print(b[1])
+                        c = b[0].split('@')
+                        print(c[0])
+                        print(c[1])
+                        calculate_hash = hashlib.sha256(b[0].encode('utf-8')).hexdigest()
+                        if calculate_hash == b[1]:
+                            print(c[0])
+                            msg_hash = hashlib.sha256(c[1].encode("utf-8")).hexdigest()
+                            print(msg_hash)
+                            combined = f"{c[0]}|{c[1]}|{msg_hash}"
+                            print("combine:",combined)
+                            recipient_socket = search_user(self.clients,c[0])
+                            if recipient_socket:
+                                print("iam here")
+                                sending_pri = rsa.encrypt(combined.encode("utf-8"), recipient_socket["public_key"])
+                                recipient_socket["socket"].send(sending_pri)
 
+                            else:
+                                print("Cannot send")
+                        else:
+                            print("Message has benn corrupt")
+
+                    else:
+                        print("Not found hehe")
                 else:
-                    self.broadcast(f"{username}: {decrypted_message}", username)
+                    self.broadcast(f"{username}|{decrypted_message}", username)
 
         except Exception as e:
             print(f"[EXCEPTION] due to {e}")

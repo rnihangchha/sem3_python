@@ -8,7 +8,7 @@ import rsa
 import hashlib
 import sqlite3
 
-HOST = "192.168.1.64"
+HOST = "localhost"
 PORT = 8888
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -17,6 +17,7 @@ PUBLIC_KEY_SIZE = 2048
 public_key, private_key = rsa.newkeys(PUBLIC_KEY_SIZE)
 public_partner = rsa.PublicKey.load_pkcs1(client_socket.recv(1024))
 client_socket.send(public_key.save_pkcs1("PEM"))
+help_counter = 0
 
 def create_user(fullname, username, password):
     if len(fullname) < 6:
@@ -150,27 +151,37 @@ def restore_password_placeholder(event):
 message_gg = None
 
 
-
 def receive_messages(client_socket, private_key, text_area_widget):
     try:
         while True:
             encrypted_message = client_socket.recv(1024)
-            if not encrypted_message:
-                break
-            else:
-                # Decrypt the message using the client's private key
-                message = rsa.decrypt(encrypted_message, private_key).decode('utf-8')
-                # To update the text area, you need to use the text widget's `insert` method
-                text_area_widget.config(state="normal")
-                text_area_widget.insert("end", message + "\n")
-                text_area_widget.config(state="disabled")
-                text_area_widget.tag_configure("bold", font=("Helvetica", 12, "bold"))
-                text_area_widget.tag_add("bold", "1.0", "end")
+            combine_msg_hash = rsa.decrypt(encrypted_message, private_key).decode("utf-8")
+            a = combine_msg_hash.split('|')
 
+            if len(a) == 3:  # Check if 'a' has at least 3 elements
+                print(a[0])
+                print(a[1])
+                print(a[2])
+                calculate_hash = hashlib.sha256(a[1].encode('utf-8')).hexdigest()
+                print(calculate_hash)
+                if calculate_hash == a[2]:
+                    print(a[1])
+                    text_area_widget.config(state="normal")
+                    b = "*******************"
+                    text_area_widget.insert("end", b + "\n")
+                    text_area_widget.insert("end",f"From {a[0]}: message: {a[1]}" + "\n")
+                    text_area_widget.config(state="disabled")
+                    text_area_widget.tag_configure("bold", font=("Helvetica", 12, "bold"))
+                    text_area_widget.tag_add("bold", "1.0", "end")
+            else:
+                print("Invalid message format")
     except Exception as e:
-        print(f"Error receiving message: {str(e)}")
+            print("Error:", e)
     finally:
         client_socket.close()
+
+
+
 
 def login():
   
@@ -200,25 +211,50 @@ def login():
                                 # Send the encrypted "quit" message to the server
                                 client_socket.send(rsa.encrypt(message_gg.encode('utf-8'), public_partner))
                                 exit()
+                        
                             else:
-                                client_socket.send(rsa.encrypt(f"{message_gg}".encode('utf-8'), public_partner))
+                                hash_message = hashlib.sha256(message_gg.encode('utf-8')).hexdigest()
+                                combine_messg_hash = f"{message_gg}|{hash_message}"
+                                client_socket.send(rsa.encrypt(f"{combine_messg_hash}".encode('utf-8'), public_partner))
                             message_entry.delete(0, tk.END)
-                        except Exception as e:
+                        except Exception as e:  
                             print(f"Error sending message: {str(e)}")
+                    
+                def help():
+                    global help_counter
+                    
+                    if help_counter < 1:
+                        help_window = tk.Toplevel()
+                        help_window.title("Help")
+                        help_window.geometry("500x300")
+                        
+                        help_label = tk.Label(help_window, text="Private message can be doneby specifying {username@your_message}", font=('Helvetica 10 underline'))
+                        help_label.place(x=30, y=40)
+                        help_counter += 1
+                    else:
+                        messagebox.showerror("Error", "Help window is already open")
+
+                    
+
 
                 root.destroy()
-                Window = tk.Toplevel()
+                Window = tk.Tk()
                 
                 Window.geometry("900x555+200+200")
+                Window.title("Open Community Chat")
                 Window.resizable(0,0)
-                left_frame = tk.Frame(Window, width=160, height=560, bg="lightblue")
+                left_frame = tk.Frame(Window, width=160, height=560, bg="DarkOliveGreen")
                 left_frame.place(x=0, y=0)
+                label_left = tk.Label(left_frame, text=entry,font= ('Helvetica 22 underline'), background="DarkOliveGreen")
+                label_left.place(x=7,y=250)
+                button = tk.Button(left_frame, text="Help", background="white",command=help)
+                button.place(x=35,y=520)
 
                 right_frame = tk.Frame(Window, width=900, height=100000, bg="lightgreen")
                 right_frame.place(x=160, y=0)
 
                 text_area = tk.Text(right_frame,width=800, height=200)
-                text_area.config(state= "disabled")
+                text_area.config(state= "disabled",background="LightCyan2")
                 text_area.place(x=0,y=95)
 
 
@@ -227,9 +263,11 @@ def login():
 
                 top_label = tk.Label(top_frame, text="Open Community Chat", font=('Helvetica bold', 30), background="white")
                 top_label.place(x=175,y=20)
-
+                
                 bottom_frame = tk.Frame(right_frame, width=9000, height=90,background="grey")
                 bottom_frame.place(x=0,y=465)
+                label_left1 = tk.Label(bottom_frame, text="Note:For Guidance go to Help options",font= ('Helvetica 7 bold'), background="grey")
+                label_left1.place(x=20,y=60)
                 q = StringVar()
                 
                 message_entry = tk.Entry(bottom_frame,textvariable=q , width=100, background="white",foreground="black")
@@ -258,7 +296,7 @@ if __name__ == '__main__':
     root.configure(bg="#fff")
     root.resizable(False, False)
 
-    # Load the image using PIL
+    
     img = Image.open('C:/Users/HP/AppData/Roaming/JetBrains/PyCharmCE2023.1/scratches/hacker.jpg')
     img = ImageTk.PhotoImage(img)
 
